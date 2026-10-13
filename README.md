@@ -36,6 +36,8 @@ let config = Config::new(
         // Where this service is reachable from the browser: gateway base path (if any)
         // + wherever you nest `auth::app` below. Omit if mounted at the root.
         .base_path("/api/auth")
+        // `Path` for the refresh_token cookie. Optional — defaults to `{base_path}/refresh`.
+        .refresh_path("/api/auth/refresh")
         // `Max-Age`, in seconds, for the access/ID and refresh token cookies. Optional —
         // default to 1800 (30 minutes) and 86400 (24 hours) respectively.
         .token_expiration(3600)
@@ -125,7 +127,8 @@ any other request.
 - `AuthService::jar_for_response(&AuthResponse) -> CookieJar` — builds the jar for a
   successful `exchange_code`/`refresh_token` result (empty jar for anything else).
 - `AuthService::expired_jar() -> CookieJar` — clears all three, for a logout endpoint.
-- `AuthService::refresh_token_path() -> String` — computes `{Config::base_path}/refresh`.
+- `AuthService::refresh_token_path() -> String` — `Config::refresh_path` if set, else
+  `{Config::base_path}/refresh`.
 
 `auth::app`'s handlers already call these for you. The lower-level free functions in
 `auth::cookies` (`jar_for_response`, `expired_jar`, `auth_cookie`, `expired_auth_cookie`)

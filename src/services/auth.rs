@@ -73,7 +73,9 @@ impl AuthService {
     }
 
     pub fn refresh_token_path(&self) -> String {
-        format!("{}{}", self.config.base_path, cookies::REFRESH_TOKEN_ROUTE)
+        self.config.refresh_path.clone().unwrap_or_else(|| {
+            format!("{}{}", self.config.base_path, cookies::REFRESH_TOKEN_ROUTE)
+        })
     }
 
     pub fn jar_for_response(&self, response: &AuthResponse) -> CookieJar {

@@ -10,6 +10,7 @@ pub struct Config {
     pub(crate) client_secret: String,
     pub(crate) domain: String,
     pub(crate) base_path: String,
+    pub(crate) refresh_path: Option<String>,
     pub(crate) token_expiration: u32,
     pub(crate) refresh_expiration: u32,
 }
@@ -37,6 +38,7 @@ impl Config {
             client_secret,
             domain,
             base_path: value.base_path.unwrap_or_default(),
+            refresh_path: value.refresh_path,
             token_expiration: value.token_expiration.unwrap_or(DEFAULT_TOKEN_EXPIRATION),
             refresh_expiration: value
                 .refresh_expiration
@@ -51,6 +53,7 @@ pub struct ConfigBuilder {
     client_secret: Option<String>,
     domain: Option<String>,
     base_path: Option<String>,
+    refresh_path: Option<String>,
     token_expiration: Option<u32>,
     refresh_expiration: Option<u32>,
 }
@@ -73,6 +76,11 @@ impl ConfigBuilder {
 
     pub fn base_path(mut self, base_path: &str) -> Self {
         self.base_path = Some(base_path.to_string());
+        self
+    }
+
+    pub fn refresh_path(mut self, refresh_path: &str) -> Self {
+        self.refresh_path = Some(refresh_path.to_string());
         self
     }
 
