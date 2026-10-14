@@ -40,8 +40,8 @@ let config = Config::new(
         .refresh_path("/api/auth/refresh")
         // `Max-Age`, in seconds, for the access/ID and refresh token cookies. Optional —
         // default to 1800 (30 minutes) and 86400 (24 hours) respectively.
-        .token_expiration(3600)
-        .refresh_expiration(2_592_000),
+        .token_expiration(Some(3600))
+        .refresh_expiration(Some(2_592_000)),
 )?;
 
 let state = Arc::new(ServiceState {
@@ -90,28 +90,41 @@ Prefer wiring `AuthService` into your own handlers instead of using `auth::app`?
 pair built directly on the service:
 
 ```rust
+use auth::dto::auth::{AuthResponse, CallbackRequest, LoginQuery, LoginResponse};
 use auth::state::ServiceStateType;
-use axum::extract::State;
+use axum::Json;
+use axum::extract::{Query, State};
 use axum::response::IntoResponse;
+use shared::response::ServiceResponse;
 
-async fn login(State(state): ServiceStateType, redirect_uri: String) -> impl IntoResponse {
-    state.auth_service.login_url(&redirect_uri)
-    // -> { url, code_verifier }: send the browser to `url`, and hang on to
-    //    `code_verifier` (e.g. a cookie) to supply back to `callback`.
+async fn login(
+    State(state): ServiceStateType,
+    Query(query): Query<LoginQuery>,
+) -> ServiceResponse<LoginResponse> {
+    // Send the browser to `url`, and hang on to `code_verifier` (e.g. a cookie) to
+    // supply back to `callback`.
+    state
+        .auth_service
+        .login_url(&query.redirect_uri)
+        .map(|login| LoginResponse { url: login.url, code_verifier: login.code_verifier })
+        .into()
 }
 
 async fn callback(
     State(state): ServiceStateType,
-    code: String,
-    code_verifier: String,
-    redirect_uri: String,
+    Json(payload): Json<CallbackRequest>,
 ) -> impl IntoResponse {
-    let result = state.auth_service.exchange_code(&code, &code_verifier, &redirect_uri).await;
+    let result = state
+        .auth_service
+        .exchange_code(&payload.code, &payload.code_verifier, &payload.redirect_uri)
+        .await;
     let jar = result
         .as_ref()
         .map(|r| state.auth_service.jar_for_response(r))
         .unwrap_or_default();
-    (jar, /* turn `result` into your response */)
+    let response: ServiceResponse<AuthResponse> = result.into();
+
+    (jar, response)
 }
 ```
 
@@ -158,6 +171,8 @@ Handlers read the resolved user with the usual `axum::Extension<auth::dto::auth:
 extractor. `CurrentUser` always has `sub`/`username`; anything else Cognito returns
 (`email`, `email_verified`, custom attributes, ...) is in `attributes: HashMap<String,
 serde_json::Value>`, since that depends on the access token's scopes.
+`auth::get_user_email(&user)` reads the `email` attribute, failing with `403` if it isn't
+there.
 
 ```rust
 use auth::dto::auth::CurrentUser;
@@ -188,8 +203,9 @@ client secret` / `invalid cognito domain`) if any are missing. The rest are opti
 | `.client_secret()`     | yes      | The Cognito app client secret (used as Basic auth against the token endpoint). |
 | `.domain()`            | yes      | The full Cognito hosted-UI domain, e.g. `https://your-domain.auth.us-east-1.amazoncognito.com` — not just the domain prefix. |
 | `.base_path()`         | no       | Where this service is reachable from the browser's point of view: the gateway's base path (if any) plus wherever the consuming app nests `auth::app` (e.g. `"/api/auth"`). Defaults to `""` (mounted at the root). Used only to scope the `refresh_token` cookie's `Path`. |
-| `.token_expiration()`  | no       | `Max-Age`, in seconds, for the `access_token`/`id_token` cookies. Defaults to `1800` (30 minutes). |
-| `.refresh_expiration()`| no       | `Max-Age`, in seconds, for the `refresh_token` cookie. Defaults to `86400` (24 hours). |
+| `.refresh_path()`      | no       | `Path` for the `refresh_token` cookie. Defaults to `{base_path}/refresh`. Set it when the refresh endpoint is reachable somewhere other than that. |
+| `.token_expiration()`  | no       | `Max-Age`, in seconds, for the `access_token`/`id_token` cookies, as an `Option<u32>` (`None` keeps the default). Defaults to `1800` (30 minutes). |
+| `.refresh_expiration()`| no       | `Max-Age`, in seconds, for the `refresh_token` cookie, as an `Option<u32>`. Defaults to `86400` (24 hours). |
 
 ## Errors
 
